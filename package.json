@@ -1,0 +1,14 @@
+{
+  "name": "globepretty",
+  "version": "1.0.0",
+  "description": "Adds clouds, rotation, and other pretty elements",
+  "main": "node_server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Tim Connors",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
