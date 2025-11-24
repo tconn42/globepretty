@@ -66,7 +66,16 @@ Globe = function(container, opts)
       imageURL: 'images/earth-blue-marble.jpg',
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-topology.png
-      bumpImageURL: 'images/earth-topology.png'
+      bumpImageURL: 'images/earth-topology.png',
+
+      // Altitude to show clouds
+      cloudsAltitude: 0.015,
+
+      // How fast to rotate the clouds in deg/frame
+      cloudsRotateSpeed: 0.006,
+
+      // The url of the clouds
+      cloudsURL: 'images/clouds.png'
     },
 
     moon:
@@ -92,20 +101,18 @@ Globe = function(container, opts)
            // that stops the globe rotation
            interactionSpinThreshold: .01,
 
+           // When zoomed in to greater than this altitude, do not spin the globe
+           onlySpinAboveAltitude: .4,
+
            // Whether to show clouds
            showClouds: true,
 
-           // Altitude to show clouds
-           cloudsAltitude: 0.015,
-
-           // How fast to rotate the clouds in deg/frame
-           cloudsRotateSpeed: 0.006,
-
-           // The url of the clouds
-           cloudsURL: 'images/clouds.png',
-
            // Whether to show slippy tiles for infinite zoom
            tileEngineURL: 'https://tile.openstreetmap.org/${l}/${x}/${y}.png',
+
+           // The altitude at which to place the planet surface image so that it
+           // appears above the slippy tiles (if present) and below the clouds
+           surfaceAltitude: 0.01,
 
            // Specify the planet to use: earth or moon
            planet: 'earth',
@@ -191,7 +198,11 @@ Globe = function(container, opts)
       _nonInteractionTimer = setTimeout(() =>
       {
         _nonInteractionTimer = null;
-        g.spinGlobe();
+
+        // If we are too zoomed in, don't spin
+        const latlngalt = g.pointOfView();
+        if (latlngalt.altitude > opts.onlySpinAboveAltitude)
+          g.spinGlobe();
       }, opts.autoSpinAfterIdleMs);
     }
   }
@@ -268,7 +279,7 @@ Globe = function(container, opts)
   g.showClouds = async function(show)
   {
     // Do nothing if already in the desired show state
-    if (show === _cloudsshown)
+    if (show === _cloudsshown || !planet?.cloudsURL)
       return;
 
     _cloudsshown = show;
@@ -303,10 +314,10 @@ Globe = function(container, opts)
     return new Promise(resolve =>
     {
       // Create the clouds texture
-      new _three.TextureLoader().load(opts.cloudsURL, cloudsTexture => 
+      new _three.TextureLoader().load(planet.cloudsURL, cloudsTexture => 
       {
         _clouds = new _three.Mesh(
-          new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.cloudsAltitude), 75, 75),
+          new _three.SphereGeometry(g.getGlobeRadius() * (1 + planet.cloudsAltitude), 75, 75),
           new _three.MeshPhongMaterial({ map: cloudsTexture, transparent: true })
         );
         _addClouds();
@@ -324,17 +335,12 @@ Globe = function(container, opts)
     // Permanently rotate the clouds
     function rotateClouds() 
     {
-      _clouds.rotation.y += opts.cloudsRotateSpeed * Math.PI / 180;
+      _clouds.rotation.y += planet.cloudsRotateSpeed * Math.PI / 180;
       if (_cloudsshown)
         requestAnimationFrame(rotateClouds);
      }
     rotateClouds();
   };
-
-  let setCloudSpeed = function(speed)
-  {
-    opts.cloudsRotateSpeed = speed;
-  }
 
   ///////////////////////////////////////////////////////////////////////////
   // REALISTIC SURFACE OVERLAY
@@ -361,7 +367,7 @@ Globe = function(container, opts)
       new _three.TextureLoader().load(planet.imageURL, surfaceTexture => 
       {
         _surface = new _three.Mesh(
-          new _three.SphereGeometry(g.getGlobeRadius() * (1 + 0.01), 75, 75),
+          new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 75, 75),
           new _three.MeshPhongMaterial({ map: surfaceTexture, transparent: true })
         );
 
