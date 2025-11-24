@@ -227,19 +227,23 @@ Globe = function(container, opts)
   // Override zoom so we catch interactions that stop the globe spin and so
   // we can change the surface opacity if applicable
   let _onZoomCbfn;
-  let _prevAlt = null;
+  let _prevLatLngAlt;
   g.onZoom(latLngAlt =>
   {
     // We only count altitude changes as an interaction
-    if (_prevAlt !== null &&
-        Math.abs(_prevAlt - latLngAlt.altitude) > opts.interactionSpinThreshold)  
+    if (_prevLatLngAlt?.altitude != null &&
+        Math.abs(_prevLatLngAlt.altitude - latLngAlt.altitude) > opts.interactionSpinThreshold)  
       _onInteraction();
 
     // Handle surface opacity
-    if (Math.abs(_prevAlt - latLngAlt.altitude) > .00001)
+    if (Math.abs(_prevLatLngAlt?.altitude - latLngAlt.altitude) > .00001)
       _changeSurfaceOpacity(latLngAlt.altitude);
 
-    _prevAlt = latLngAlt.altitude;
+    // Handle day/night shading
+    if (_prevLatLngAlt?.lat != latLngAlt.lat || _prevLatLngAlt?.lng != latLngAlt.lng)
+      _updateSunRotation(latLngAlt);
+
+    _prevLatLngAlt = latLngAlt;
 
     if (_onZoomCbfn)
       _onZoomCbfn();
@@ -291,7 +295,7 @@ Globe = function(container, opts)
   ///////////////////////////////////////////////////////////////////////////
 
   // Show or hide the surface overlay
-  let _surface;
+  let _surface, _solar;
   const _showSurface = async function()
   {
     if (!_three)
@@ -305,32 +309,37 @@ Globe = function(container, opts)
       _three = await import('../js/three.core.mjs');
     }
 
-    return new Promise(resolve =>
-    {
-      // Create the surface texture
-      const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
-      new _three.TextureLoader().load(planetimage, surfaceTexture => 
-      {
-        new _three.TextureLoader().load(planet.bumpImageURL, bumpTexture => 
-        {
-          const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
-          const mat = opts.dayMode === 'night' 
-                        ? { color: 0x000000, emissive: 0xffffff, emissiveMap: surfaceTexture }
-                        : { };
-          _surface = new _three.Mesh(
-            new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
-                                      widthSegments, widthSegments/2),
-            new _three.MeshLambertMaterial({ ...mat, map: surfaceTexture, transparent: true, 
-                                             bumpMap: bumpTexture, bumpScale: planet.bumpScale })
-          );
+    _solar = opts.dayMode === 'daynight'
+               ? await import('../js/solar-calculator.mjs')
+               : null;
 
-          // Add the surface to the scene
-          g.scene().add(_surface);
+    const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
 
-          resolve();
-        });
-      });
-    });
+    const surfaceTexture = await new _three.TextureLoader().loadAsync(planetimage);
+    const bumpTexture = await new _three.TextureLoader().loadAsync(planet.bumpImageURL);
+    const surface2Texture = opts.dayMode === 'daynight' 
+                              ? await new _three.TextureLoader().loadAsync(planet.nightImageURL)
+                              : null;
+
+    const matopts = opts.dayMode === 'night' 
+                     ? { color: 0x000000, emissive: 0xffffff, emissiveMap: surfaceTexture }
+                     : { };
+    const mat = opts.dayMode === 'daynight'
+                  ? _createDayNightMaterial(surfaceTexture, surface2Texture)
+                  : new _three.MeshLambertMaterial({ ...matopts, map: surfaceTexture, 
+                                                     transparent: true, bumpMap: bumpTexture,
+                                                     bumpScale: planet.bumpScale });
+    const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
+    const geo = new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
+                                          widthSegments, widthSegments/2);
+    _surface = new _three.Mesh(geo, mat);
+
+    // Set sun position
+    if (opts.dayMode === 'daynight')
+      _moveSunToPositionAtDate();
+
+    // Add the surface to the scene
+    g.scene().add(_surface);
   }
 
   const _changeSurfaceOpacity = function(altitude)
@@ -342,7 +351,106 @@ Globe = function(container, opts)
     const opacity0alt = .4;
 
     const opacity = Math.min(1, Math.max(0, (altitude - opacity0alt) / (opacity1alt - opacity0alt)));
-    _surface.material.opacity = opacity;
+
+    if (_solar)
+      _surface.material.uniforms.opacity.value = opacity;
+    else
+      _surface.material.opacity = opacity;
+  };
+
+  // Get position of sun at given dt
+  const _sunPosAt = function(_solar, dt)
+  {
+    const day = new Date(+dt).setUTCHours(0, 0, 0, 0);
+    const t = _solar.century(dt);
+    const lng = (day - dt) / 864e5 * 360 - 180;
+    return [lng - _solar.equationOfTime(t) / 4, _solar.declination(t)];
+  };
+
+  const _moveSunToPositionAtDate = function(dt = new Date())
+  {
+    if (_solar && _surface)
+      _surface.material.uniforms.sunPosition.value.set(..._sunPosAt(_solar, dt));
+  };
+
+  const _updateSunRotation = function(latLngAlt)
+  {
+    if (_solar && _surface)
+      _surface.material.uniforms.globeRotation.value.set(latLngAlt.lng, latLngAlt.lat);
+  };
+
+  // Create day/night shader
+  const _createDayNightMaterial = function(daytexture, nighttexture)
+  {
+    const vertexShader = `
+        varying vec3 vNormal;
+        varying vec2 vUv;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+
+    const fragmentShader = `
+        #define PI 3.141592653589793
+        uniform sampler2D dayTexture;
+        uniform sampler2D nightTexture;
+        uniform vec2 sunPosition;
+        uniform vec2 globeRotation;
+        uniform float opacity;
+        varying vec3 vNormal;
+        varying vec2 vUv;
+
+        float toRad(in float a) {
+          return a * PI / 180.0;
+        }
+
+        vec3 Polar2Cartesian(in vec2 c) { // [lng, lat]
+          float theta = toRad(90.0 - c.x);
+          float phi = toRad(90.0 - c.y);
+          return vec3( // x,y,z
+            sin(phi) * cos(theta),
+            cos(phi),
+            sin(phi) * sin(theta)
+          );
+        }
+
+        void main() {
+          float invLon = toRad(globeRotation.x);
+          float invLat = -toRad(globeRotation.y);
+          mat3 rotX = mat3(
+            1, 0, 0,
+            0, cos(invLat), -sin(invLat),
+            0, sin(invLat), cos(invLat)
+          );
+          mat3 rotY = mat3(
+            cos(invLon), 0, sin(invLon),
+            0, 1, 0,
+            -sin(invLon), 0, cos(invLon)
+          );
+          vec3 rotatedSunDirection = rotX * rotY * Polar2Cartesian(sunPosition);
+          float intensity = dot(normalize(vNormal), normalize(rotatedSunDirection));
+          vec4 dayColor = texture2D(dayTexture, vUv);
+          vec4 nightColor = texture2D(nightTexture, vUv);
+          float blendFactor = smoothstep(-0.1, 0.1, intensity);
+          gl_FragColor = mix(nightColor, dayColor, blendFactor);
+          gl_FragColor.a = opacity;
+        }
+    `;
+
+    return new _three.ShaderMaterial({
+        uniforms: {
+          dayTexture: { value: daytexture },
+          nightTexture: { value: nighttexture },
+          sunPosition: { value: new _three.Vector2() },
+          globeRotation: { value: new _three.Vector2() },
+          opacity: { value: 1.0 }
+        },
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader,
+        transparent: true
+      });
   };
 
   ///////////////////////////////////////////////////////////////////////////
