@@ -157,9 +157,9 @@ Globe = function(container, opts)
     opts.dayMode = 'day';
 
   // Apply images
-  if (!opts.tileEngineURL && planet?.imageURL)
+  if (!opts.tileEngineURL && planet?.imageURL && opts.dayMode !== 'daynight')
     g.globeImageUrl(opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL);
-  if (!opts.tileEngineURL && planet?.bumpImageURL)
+  if (!opts.tileEngineURL && planet?.bumpImageURL && opts.dayMode !== 'daynight')
     g.bumpImageUrl(planet.bumpImageURL);
   if (opts.starsURL)
     g.backgroundImageUrl(opts.starsURL);
@@ -177,7 +177,7 @@ Globe = function(container, opts)
     // Auto-rotate the globe if requested
     g.spinGlobe(opts.autoRotateSpeed);
 
-    if (opts.tileEngineURL)
+    if (opts.tileEngineURL || opts.dayMode === 'daynight')
       await _showSurface();
     if (opts.showClouds)
       await g.showClouds(true);
@@ -336,7 +336,7 @@ Globe = function(container, opts)
 
     // Set sun position
     if (opts.dayMode === 'daynight')
-      _moveSunToPositionAtDate();
+      _startSunLifeLoop();
 
     // Add the surface to the scene
     g.scene().add(_surface);
@@ -344,7 +344,7 @@ Globe = function(container, opts)
 
   const _changeSurfaceOpacity = function(altitude)
   {
-    if (!_surface)
+    if (!_surface || !opts.tileEngineURL)
       return;
 
     const opacity1alt = 1;
@@ -371,6 +371,14 @@ Globe = function(container, opts)
   {
     if (_solar && _surface)
       _surface.material.uniforms.sunPosition.value.set(..._sunPosAt(_solar, dt));
+  };
+
+  const _startSunLifeLoop = function()
+  {
+    _moveSunToPositionAtDate();
+
+    // Update once per minute
+    setInterval(_moveSunToPositionAtDate, 60 * 1000);
   };
 
   const _updateSunRotation = function(latLngAlt)
