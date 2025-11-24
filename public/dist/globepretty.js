@@ -68,6 +68,9 @@ Globe = function(container, opts)
       // Originally at http://unpkg.com/three-globe/example/img/earth-topology.png
       bumpImageURL: 'images/earth-topology.png',
 
+      // How much to exaggerate the bump map
+      bumpScale: 10,
+
       // Altitude to show clouds
       cloudsAltitude: 0.015,
 
@@ -84,7 +87,8 @@ Globe = function(container, opts)
       atmosphere: false,
 
       imageURL: 'images/lunar_surface.jpg',
-      bumpImageURL: 'images/lunar_bumpmap.jpg'
+      bumpImageURL: 'images/lunar_bumpmap.jpg',
+      bumpScale: 1
     }
   };
 
@@ -142,7 +146,7 @@ Globe = function(container, opts)
   const planet = _planet[opts.planet];
   if (!opts.tileEngineURL && planet?.imageURL)
     g.globeImageUrl(planet.imageURL);
-  if (planet?.bumpImageURL)
+  if (!opts.tileEngineURL && planet?.bumpImageURL)
     g.bumpImageUrl(planet.bumpImageURL);
   if (opts.starsURL)
     g.backgroundImageUrl(opts.starsURL);
@@ -160,10 +164,10 @@ Globe = function(container, opts)
     // Auto-rotate the globe if requested
     g.spinGlobe(opts.autoRotateSpeed);
 
-    if (opts.showClouds)
-      await g.showClouds(true);
     if (opts.tileEngineURL)
       await _showSurface();
+    if (opts.showClouds)
+      await g.showClouds(true);
 
     if (_globeReadyCbfn)
       _globeReadyCbfn();
@@ -270,6 +274,61 @@ Globe = function(container, opts)
   }
 
   ///////////////////////////////////////////////////////////////////////////
+  // REALISTIC SURFACE OVERLAY
+  ///////////////////////////////////////////////////////////////////////////
+
+  // Show or hide the surface overlay
+  let _surface;
+  const _showSurface = async function()
+  {
+    if (!_three)
+    {
+      // We dont want three.js to complain that it was brought in again
+      // after being brought in by global.gl, but we have to bring it in
+      // again, because global.gl doesnt expose it. Here we just delete
+      // the flag that three.js uses to detect that it was already loaded.
+      delete window.__THREE__;
+
+      _three = await import('../js/three.core.mjs');
+    }
+
+    return new Promise(resolve =>
+    {
+      // Create the surface texture
+      new _three.TextureLoader().load(planet.imageURL, surfaceTexture => 
+      {
+        new _three.TextureLoader().load(planet.bumpImageURL, bumpTexture => 
+        {
+          const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
+          _surface = new _three.Mesh(
+            new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
+                                      widthSegments, widthSegments/2),
+            new _three.MeshPhongMaterial({ map: surfaceTexture, transparent: true,
+                                           bumpMap: bumpTexture, bumpScale: planet.bumpScale })
+          );
+
+          // Add the surface to the scene
+          g.scene().add(_surface);
+
+          resolve();
+        });
+      });
+    });
+  }
+
+  const _changeSurfaceOpacity = function(altitude)
+  {
+    if (!_surface)
+      return;
+
+    const opacity1alt = 1;
+    const opacity0alt = .4;
+
+    const opacity = Math.min(1, Math.max(0, (altitude - opacity0alt) / (opacity1alt - opacity0alt)));
+    _surface.material.opacity = opacity;
+  };
+
+  ///////////////////////////////////////////////////////////////////////////
   // CLOUDS
   ///////////////////////////////////////////////////////////////////////////
 
@@ -316,10 +375,14 @@ Globe = function(container, opts)
       // Create the clouds texture
       new _three.TextureLoader().load(planet.cloudsURL, cloudsTexture => 
       {
+        const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
+
         _clouds = new _three.Mesh(
-          new _three.SphereGeometry(g.getGlobeRadius() * (1 + planet.cloudsAltitude), 75, 75),
+          new _three.SphereGeometry(g.getGlobeRadius() * (1 + planet.cloudsAltitude), 
+                                    widthSegments, widthSegments/2),
           new _three.MeshPhongMaterial({ map: cloudsTexture, transparent: true })
         );
+
         _addClouds();
         resolve();
       });
@@ -340,55 +403,6 @@ Globe = function(container, opts)
         requestAnimationFrame(rotateClouds);
      }
     rotateClouds();
-  };
-
-  ///////////////////////////////////////////////////////////////////////////
-  // REALISTIC SURFACE OVERLAY
-  ///////////////////////////////////////////////////////////////////////////
-
-  // Show or hide the surface overlay
-  let _surface;
-  const _showSurface = async function()
-  {
-    if (!_three)
-    {
-      // We dont want three.js to complain that it was brought in again
-      // after being brought in by global.gl, but we have to bring it in
-      // again, because global.gl doesnt expose it. Here we just delete
-      // the flag that three.js uses to detect that it was already loaded.
-      delete window.__THREE__;
-
-      _three = await import('../js/three.core.mjs');
-    }
-
-    return new Promise(resolve =>
-    {
-      // Create the surface texture
-      new _three.TextureLoader().load(planet.imageURL, surfaceTexture => 
-      {
-        _surface = new _three.Mesh(
-          new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 75, 75),
-          new _three.MeshPhongMaterial({ map: surfaceTexture, transparent: true })
-        );
-
-        // Add the clouds to the scene
-        g.scene().add(_surface);
-
-        resolve();
-      });
-    });
-  }
-
-  const _changeSurfaceOpacity = function(altitude)
-  {
-    if (!_surface)
-      return;
-
-    const opacity1alt = 1;
-    const opacity0alt = .4;
-
-    const opacity = Math.min(1, Math.max(0, (altitude - opacity0alt) / (opacity1alt - opacity0alt)));
-    _surface.material.opacity = opacity;
   };
 
   ///////////////////////////////////////////////////////////////////////////
