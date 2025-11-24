@@ -52,6 +52,8 @@ const OrigGlobe = Globe;
 
 Globe = function(container, opts)
 {
+  let _three;
+
   // Planet details
   const _planet =
   {
@@ -94,13 +96,16 @@ Globe = function(container, opts)
            showClouds: true,
 
            // Altitude to show clouds
-           cloudsAltitude: 0.004,
+           cloudsAltitude: 0.015,
 
            // How fast to rotate the clouds in deg/frame
            cloudsRotateSpeed: 0.006,
 
            // The url of the clouds
            cloudsURL: 'images/clouds.png',
+
+           // Whether to show slippy tiles for infinite zoom
+           tileEngineURL: 'https://tile.openstreetmap.org/${l}/${x}/${y}.png',
 
            // Specify the planet to use: earth or moon
            planet: 'earth',
@@ -118,9 +123,17 @@ Globe = function(container, opts)
 
   const g = new OrigGlobe(container, opts);
 
+  // Apply tile server
+  if (opts.tileEngineURL)
+  {
+    g.globeTileEngineUrl((x, y, l) => opts.tileEngineURL.replace('${x}', x)
+                                                        .replace('${y}', y)
+                                                        .replace('${l}', l));
+  }
+
   // Apply images
   const planet = _planet[opts.planet];
-  if (planet?.imageURL)
+  if (!opts.tileEngineURL && planet?.imageURL)
     g.globeImageUrl(planet.imageURL);
   if (planet?.bumpImageURL)
     g.bumpImageUrl(planet.bumpImageURL);
@@ -140,7 +153,10 @@ Globe = function(container, opts)
     // Auto-rotate the globe if requested
     g.spinGlobe(opts.autoRotateSpeed);
 
-    await g.showClouds(opts.showClouds);
+    if (opts.showClouds)
+      await g.showClouds(true);
+    if (opts.tileEngineURL)
+      await _showSurface();
 
     if (_globeReadyCbfn)
       _globeReadyCbfn();
@@ -180,7 +196,8 @@ Globe = function(container, opts)
     }
   }
 
-  // Override zoom so we catch interactions that stop the globe spin
+  // Override zoom so we catch interactions that stop the globe spin and so
+  // we can change the surface opacity if applicable
   let _onZoomCbfn;
   let _prevAlt = null;
   g.onZoom(latLngAlt =>
@@ -189,6 +206,11 @@ Globe = function(container, opts)
     if (_prevAlt !== null &&
         Math.abs(_prevAlt - latLngAlt.altitude) > opts.interactionSpinThreshold)  
       _onInteraction();
+
+    // Handle surface opacity
+    if (Math.abs(_prevAlt - latLngAlt.altitude) > .00001)
+      _changeSurfaceOpacity(latLngAlt.altitude);
+
     _prevAlt = latLngAlt.altitude;
 
     if (_onZoomCbfn)
@@ -265,7 +287,6 @@ Globe = function(container, opts)
       g.scene().remove(_clouds);
   }
 
-  let _three;
   const _createClouds = async function()
   {
     if (!_three)
@@ -310,11 +331,59 @@ Globe = function(container, opts)
     rotateClouds();
   };
 
-
   let setCloudSpeed = function(speed)
   {
     opts.cloudsRotateSpeed = speed;
   }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // REALISTIC SURFACE OVERLAY
+  ///////////////////////////////////////////////////////////////////////////
+
+  // Show or hide the surface overlay
+  let _surface;
+  const _showSurface = async function()
+  {
+    if (!_three)
+    {
+      // We dont want three.js to complain that it was brought in again
+      // after being brought in by global.gl, but we have to bring it in
+      // again, because global.gl doesnt expose it. Here we just delete
+      // the flag that three.js uses to detect that it was already loaded.
+      delete window.__THREE__;
+
+      _three = await import('../js/three.core.mjs');
+    }
+
+    return new Promise(resolve =>
+    {
+      // Create the surface texture
+      new _three.TextureLoader().load(planet.imageURL, surfaceTexture => 
+      {
+        _surface = new _three.Mesh(
+          new _three.SphereGeometry(g.getGlobeRadius() * (1 + 0.01), 75, 75),
+          new _three.MeshPhongMaterial({ map: surfaceTexture, transparent: true })
+        );
+
+        // Add the clouds to the scene
+        g.scene().add(_surface);
+
+        resolve();
+      });
+    });
+  }
+
+  const _changeSurfaceOpacity = function(altitude)
+  {
+    if (!_surface)
+      return;
+
+    const opacity1alt = 1;
+    const opacity0alt = .4;
+
+    const opacity = Math.min(1, Math.max(0, (altitude - opacity0alt) / (opacity1alt - opacity0alt)));
+    _surface.material.opacity = opacity;
+  };
 
   ///////////////////////////////////////////////////////////////////////////
   // RESIZING
