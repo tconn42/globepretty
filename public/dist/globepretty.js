@@ -65,6 +65,9 @@ Globe = function(container, opts)
       // Originally at http://unpkg.com/three-globe/example/img/earth-blue-marble.jpg
       imageURL: 'images/earth-blue-marble.jpg',
 
+      // Originally at http://unpkg.com/three-globe/example/img/earth-blue-marble.jpg
+      nightImageURL: 'images/earth-night.jpg',
+
       // Originally at http://unpkg.com/three-globe/example/img/earth-topology.png
       bumpImageURL: 'images/earth-topology.png',
 
@@ -121,6 +124,10 @@ Globe = function(container, opts)
            // Specify the planet to use: earth or moon
            planet: 'earth',
 
+           // Specify one of 'day', 'night', or 'daynight' (which blends day/night
+           // images according to where the sun is right now)
+           dayMode: 'day',
+
            // The url of the background stars
            starsURL: 'images/night-sky.png',
 
@@ -134,7 +141,7 @@ Globe = function(container, opts)
 
   const g = new OrigGlobe(container, opts);
 
-  // Apply tile server
+  // Apply tile server if given
   if (opts.tileEngineURL)
   {
     g.globeTileEngineUrl((x, y, l) => opts.tileEngineURL.replace('${x}', x)
@@ -142,10 +149,16 @@ Globe = function(container, opts)
                                                         .replace('${l}', l));
   }
 
-  // Apply images
+
   const planet = _planet[opts.planet];
+ 
+  // If there's no night image for this planet, we must use day mode
+  if (!planet.nightImageURL)
+    opts.dayMode = 'day';
+
+  // Apply images
   if (!opts.tileEngineURL && planet?.imageURL)
-    g.globeImageUrl(planet.imageURL);
+    g.globeImageUrl(opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL);
   if (!opts.tileEngineURL && planet?.bumpImageURL)
     g.bumpImageUrl(planet.bumpImageURL);
   if (opts.starsURL)
@@ -295,16 +308,20 @@ Globe = function(container, opts)
     return new Promise(resolve =>
     {
       // Create the surface texture
-      new _three.TextureLoader().load(planet.imageURL, surfaceTexture => 
+      const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
+      new _three.TextureLoader().load(planetimage, surfaceTexture => 
       {
         new _three.TextureLoader().load(planet.bumpImageURL, bumpTexture => 
         {
           const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
+          const mat = opts.dayMode === 'night' 
+                        ? { color: 0x000000, emissive: 0xffffff, emissiveMap: surfaceTexture }
+                        : { };
           _surface = new _three.Mesh(
             new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
                                       widthSegments, widthSegments/2),
-            new _three.MeshPhongMaterial({ map: surfaceTexture, transparent: true,
-                                           bumpMap: bumpTexture, bumpScale: planet.bumpScale })
+            new _three.MeshLambertMaterial({ ...mat, map: surfaceTexture, transparent: true, 
+                                             bumpMap: bumpTexture, bumpScale: planet.bumpScale })
           );
 
           // Add the surface to the scene
@@ -382,6 +399,10 @@ Globe = function(container, opts)
                                     widthSegments, widthSegments/2),
           new _three.MeshPhongMaterial({ map: cloudsTexture, transparent: true })
         );
+
+        // Clouds are a bit clearer at night
+        if (opts.dayMode === 'night')
+          _clouds.material.opacity = .4;
 
         _addClouds();
         resolve();
