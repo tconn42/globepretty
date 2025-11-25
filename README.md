@@ -26,21 +26,13 @@ constructor:
 
 ##### &nbsp;  autoRotateSpeed (default 0.35)
 
-&nbsp;    Spins the globe at the given speed. Negative speed spins backward.
-
-&nbsp;    Zero speed stops it. User interactions stop it temporarily.
-
-&nbsp;    Note that spin can also be started and stopped with the new member
-
-&nbsp;    function spinGlobe(speed).
+&nbsp;    Spins the globe at the given speed. Negative speed spins backward. Zero speed stops it. User interactions stop it temporarily. Note that spin can also be started and stopped with the new member function spinGlobe(speed).
 
 
 
 ##### &nbsp;  interactionSpinThreshold (default .01)
 
-&nbsp;    How much the user needs to change the altitude value before the
-
-&nbsp;    interaction temporarily stops the globe rotation
+&nbsp;    How much the user needs to change the altitude value before the interaction temporarily stops the globe rotation
 
 
 
