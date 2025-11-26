@@ -18,9 +18,7 @@ on a globe.
 
 
 
-This adds the following options to the opts parameter of the Globe
-
-constructor:
+This adds the following options to the opts parameter of the Globe constructor:
 
 
 
@@ -38,9 +36,7 @@ constructor:
 
 ##### &nbsp;  autoSpinAfterIdleMs (default 15000)
 
-&nbsp;    How long to wait after a user interaction before resuming the spin.
-
-&nbsp;    Zero to never stop spinning
+&nbsp;    How long to wait after a user interaction before resuming the spin. Zero to never stop spinning
 
 
 
@@ -52,33 +48,19 @@ constructor:
 
 ##### &nbsp;  showClouds (default true)
 
-&nbsp;    Whether to show clouds.
-
-&nbsp;    Note that clouds can also be shown or hidden with the new member
-
-&nbsp;    function showClouds(bool).
+&nbsp;    Whether to show clouds. Note that clouds can also be shown or hidden with the new member function showClouds(bool).
 
 
 
 ##### &nbsp;  tileEngineURL (default 'https://tile.openstreetmap.org/${l}/${x}/${y}.png')
 
-&nbsp;    Where to fetch slippy map tiles. If null, when zooming into the globe,
-
-&nbsp;    the surface image gets grainier and grainier. If supplied, the surface
-
-&nbsp;    is shifts from fully opaque at altitude 1 to fully transparent at
-
-&nbsp;    altitude .4, revealing the slippy map tiles underneath. This provides a
-
-&nbsp;    nice effect for zooming from a blue marble image to a useable map.
+&nbsp;    Where to fetch slippy map tiles. If null, when zooming into the globe, the surface image gets grainier and grainier. If supplied, the surface is shifts from fully opaque at altitude 1 to fully transparent at altitude .4, revealing the slippy map tiles underneath. This provides a nice effect for zooming from a blue marble image to a useable map.
 
 
 
 ##### &nbsp;  surfaceAltitude (default 0.01)
 
-&nbsp;    The altitude at which to place the planet surface image so that it
-
-&nbsp;    appears above the slippy tiles (if present) and below the clouds
+&nbsp;    The altitude at which to place the planet surface image so that it appears above the slippy tiles (if present) and below the clouds.
 
 
 
@@ -114,13 +96,7 @@ constructor:
 
 ##### &nbsp;  dayMode (default 'day')
 
-&nbsp;    One of 'day' (which renders the planet's day image), 'night' (which
-
-&nbsp;    renders the planet's night image), or 'daynight' (which blends the
-
-&nbsp;    day and night images together based on where the sun is right now and
-
-&nbsp;    accurately updates it once every minute).
+&nbsp;    One of 'day' (which renders the planet's day image), 'night' (which renders the planet's night image), or 'daynight' (which blends the day and night images together based on where the sun is right now and accurately updates it once every minute).
 
 
 
@@ -132,9 +108,7 @@ constructor:
 
 ##### &nbsp;  maxPerformance (default false)
 
-&nbsp;    Whether to increase performance at the expense of precision. If true,
-
-&nbsp;    sets rendererConfig to:
+&nbsp;    Whether to increase performance at the expense of precision. If true, sets rendererConfig to:
 
 &nbsp;      { antialias: false, alpha: false, precision: 'lowp' }
 
@@ -144,9 +118,7 @@ constructor:
 
 
 
-&nbsp;To provide a familiar view, the globe is initially set to show the user's
-
-&nbsp;location, which is derived solely from the local timezone.
+&nbsp;To provide a familiar view, the globe is initially set to show the user's location, which is derived solely from the local timezone.
 
 &nbsp;
 
