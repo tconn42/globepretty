@@ -78,7 +78,7 @@
 // To use this module, import it after importing globe.gl, like this:
 //     <script language="javascript" src="globe.gl.min.js"></script>
 //     <script type="module" src="globepretty.js"></script>
-//
+// Also make sure to copy the dist/images files to your /images folder.
 //////////////////////////////////////////////////////////////////////////////
 
 const OrigGlobe = Globe;
@@ -96,13 +96,13 @@ Globe = function(container, opts)
       atmosphere: true,
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-blue-marble.jpg
-      imageURL: 'images/earth-blue-marble.jpg',
+      imageURL: './images/earth-blue-marble.jpg',
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-blue-marble.jpg
-      nightImageURL: 'images/earth-night.jpg',
+      nightImageURL: './images/earth-night.jpg',
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-topology.png
-      bumpImageURL: 'images/earth-topology.png',
+      bumpImageURL: './images/earth-topology.png',
 
       // How much to exaggerate the bump map
       bumpScale: 10,
@@ -114,7 +114,7 @@ Globe = function(container, opts)
       cloudsRotateSpeed: 0.006,
 
       // The url of the clouds
-      cloudsURL: 'images/clouds.png'
+      cloudsURL: './images/clouds.png'
     },
 
     moon:
@@ -122,8 +122,8 @@ Globe = function(container, opts)
       radius: 1080,
       atmosphere: false,
 
-      imageURL: 'images/lunar_surface.jpg',
-      bumpImageURL: 'images/lunar_bumpmap.jpg',
+      imageURL: './images/lunar_surface.jpg',
+      bumpImageURL: '/dist/images/lunar_bumpmap.jpg',
       bumpScale: 1
     }
   };
@@ -162,7 +162,7 @@ Globe = function(container, opts)
            dayMode: 'day',
 
            // The url of the background stars
-           starsURL: 'images/night-sky.png',
+           starsURL: '/dist/images/night-sky.png',
 
            // Whether to increase performance at the expense of precision
            maxPerformance: false,
@@ -362,11 +362,11 @@ Globe = function(container, opts)
       // the flag that three.js uses to detect that it was already loaded.
       delete window.__THREE__;
 
-      _three = await import('../js/three.core.mjs');
+      _three = await import('./dependency/three.core.mjs');
     }
 
     _solar = opts.dayMode === 'daynight'
-               ? await import('../js/solar-calculator.mjs')
+               ? await import('./dependency/solar-calculator.mjs')
                : null;
 
     const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
@@ -556,7 +556,7 @@ Globe = function(container, opts)
       // the flag that three.js uses to detect that it was already loaded.
       delete window.__THREE__;
 
-      _three = await import('../js/three.core.mjs');
+      _three = await import('./dependency/three.core.mjs');
     }
 
     return new Promise(resolve =>
