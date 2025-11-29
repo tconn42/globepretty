@@ -123,7 +123,7 @@ Globe = function(container, opts)
       atmosphere: false,
 
       imageURL: './images/lunar_surface.jpg',
-      bumpImageURL: '/dist/images/lunar_bumpmap.jpg',
+      bumpImageURL: './images/lunar_bumpmap.jpg',
       bumpScale: 1
     }
   };
@@ -162,7 +162,7 @@ Globe = function(container, opts)
            dayMode: 'day',
 
            // The url of the background stars
-           starsURL: '/dist/images/night-sky.png',
+           starsURL: './images/night-sky.png',
 
            // Whether to increase performance at the expense of precision
            maxPerformance: false,
