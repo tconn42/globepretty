@@ -43,7 +43,7 @@
 //
 //   planet (default 'earth')
 //     Specify the planet to use: 'earth', 'moon', 'mercury', 'venus',
-//     'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto' or a
+//     'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'sun', or a
 //     record of the form:
 //     {
 //       radius: int,             // Planet's radius in miles
@@ -196,6 +196,13 @@ Globe = function(container, opts)
       imageURL: './images/pluto.jpg',
       bumpImageURL: './images/pluto-bump.jpg',
       bumpScale: 1
+    },
+
+    sun:
+    {
+      radius: 432288,
+      atmosphere: false,
+      imageURL: './images/sun.jpg'
     }
   };
 
@@ -226,7 +233,7 @@ Globe = function(container, opts)
            surfaceAltitude: 0.01,
 
            // Specify the planet to use: earth, moon, mercury, venus, mars, jupiter,
-           // saturn, uranus, neptune, or pluto
+           // saturn, uranus, neptune, pluto, or sun
            planet: 'earth',
 
            // Specify one of 'day', 'night', or 'daynight' (which blends day/night
