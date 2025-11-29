@@ -42,7 +42,9 @@
 //     appears above the slippy tiles (if present) and below the clouds
 //
 //   planet (default 'earth')
-//     Specify the planet to use: 'earth', 'moon', or a record of the form:
+//     Specify the planet to use: 'earth', 'moon', 'mercury', 'venus',
+//     'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto' or a
+//     record of the form:
 //     {
 //       radius: int,             // Planet's radius in miles
 //       imageURL: str,           // URL of day time image of the planet
@@ -88,6 +90,8 @@ Globe = function(container, opts)
   let _three;
 
   // Planet details
+  // The images came from http://unpkg.com/three-globe/example/img/...
+  // and from https://planetpixelemporium.com
   const _planet =
   {
     earth:
@@ -96,13 +100,13 @@ Globe = function(container, opts)
       atmosphere: true,
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-blue-marble.jpg
-      imageURL: './images/earth-blue-marble.jpg',
+      imageURL: './images/earth-day.jpg',
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-blue-marble.jpg
       nightImageURL: './images/earth-night.jpg',
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-topology.png
-      bumpImageURL: './images/earth-topology.png',
+      bumpImageURL: './images/earth-bump.png',
 
       // How much to exaggerate the bump map
       bumpScale: 10,
@@ -114,7 +118,7 @@ Globe = function(container, opts)
       cloudsRotateSpeed: 0.006,
 
       // The url of the clouds
-      cloudsURL: './images/clouds.png'
+      cloudsURL: './images/earth-clouds.png'
     },
 
     moon:
@@ -122,8 +126,75 @@ Globe = function(container, opts)
       radius: 1080,
       atmosphere: false,
 
-      imageURL: './images/lunar_surface.jpg',
-      bumpImageURL: './images/lunar_bumpmap.jpg',
+      imageURL: './images/moon.jpg',
+      bumpImageURL: './images/moon_bump.jpg',
+      bumpScale: 1
+    },
+
+    mercury:
+    {
+      radius: 1516,
+      atmosphere: false,
+
+      imageURL: './images/mercury.jpg',
+      bumpImageURL: './images/mercury-bump.jpg',
+      bumpScale: 1
+    },
+
+    venus:
+    {
+      radius: 3760.4,
+      atmosphere: false,
+
+      imageURL: './images/venus.jpg',
+      bumpImageURL: './images/venus-bump.jpg',
+      bumpScale: 1
+    },
+
+    mars:
+    {
+      radius: 2106,
+      atmosphere: false,
+
+      imageURL: './images/mars.jpg',
+      bumpImageURL: './images/mars-bump.jpg',
+      bumpScale: 1
+    },
+
+    jupiter:
+    {
+      radius: 43441,
+      atmosphere: false,
+      imageURL: './images/jupiter.jpg'
+    },
+
+    saturn:
+    {
+      radius: 36184,
+      atmosphere: false,
+      imageURL: './images/saturn.jpg'
+    },
+
+    uranus:
+    {
+      radius: 15759,
+      atmosphere: false,
+      imageURL: './images/uranus.jpg'
+    },
+
+    neptune:
+    {
+      radius: 15299,
+      atmosphere: false,
+      imageURL: './images/neptune.jpg'
+    },
+
+    pluto:
+    {
+      radius: 738.38,
+      atmosphere: false,
+      imageURL: './images/pluto.jpg',
+      bumpImageURL: './images/pluto-bump.jpg',
       bumpScale: 1
     }
   };
@@ -154,7 +225,8 @@ Globe = function(container, opts)
            // appears above the slippy tiles (if present) and below the clouds
            surfaceAltitude: 0.01,
 
-           // Specify the planet to use: earth or moon
+           // Specify the planet to use: earth, moon, mercury, venus, mars, jupiter,
+           // saturn, uranus, neptune, or pluto
            planet: 'earth',
 
            // Specify one of 'day', 'night', or 'daynight' (which blends day/night
@@ -372,7 +444,9 @@ Globe = function(container, opts)
     const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
 
     const surfaceTexture = await new _three.TextureLoader().loadAsync(planetimage);
-    const bumpTexture = await new _three.TextureLoader().loadAsync(planet.bumpImageURL);
+    const bumpTexture = planet.bumpImageURL 
+                        ? await new _three.TextureLoader().loadAsync(planet.bumpImageURL)
+                        : null;
     const surface2Texture = opts.dayMode === 'daynight' 
                               ? await new _three.TextureLoader().loadAsync(planet.nightImageURL)
                               : null;
