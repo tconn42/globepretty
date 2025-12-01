@@ -33,9 +33,9 @@
 //   tileEngineURL (default 'https://tile.openstreetmap.org/${l}/${x}/${y}.png')
 //     Where to fetch slippy map tiles. If null, when zooming into the globe,
 //     the surface image gets grainier and grainier. If supplied, the surface
-//     is shifts from fully opaque at altitude 1 to fully transparent at
-//     altitude .4, revealing the slippy map tiles underneath. This provides a
-//     nice effect for zooming from a blue marble image to a useable map.
+//     shifts from fully opaque at altitude 1 to fully transparent at altitude
+//     .4, revealing the slippy map tiles underneath. This provides a nice
+//     effect for zooming from a blue marble image to a useable map.
 //
 //   surfaceAltitude (default 0.01)
 //     The altitude at which to place the planet surface image so that it
@@ -83,10 +83,14 @@
 // Also make sure to copy the dist/images files to your /images folder.
 //////////////////////////////////////////////////////////////////////////////
 
+const version = "1.0.0";
+
 const OrigGlobe = Globe;
 
 Globe = function(container, opts)
 {
+  Globe.globePrettyVersion = version;
+
   let _three;
 
   // Planet details
