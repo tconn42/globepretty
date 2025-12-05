@@ -91,7 +91,7 @@ Globe = function(container, opts)
 {
   Globe.globePrettyVersion = version;
 
-  let _three;
+  Globe.THREE = null;
 
   // Planet details
   // The images came from http://unpkg.com/three-globe/example/img/...
@@ -437,15 +437,15 @@ Globe = function(container, opts)
   let _surface, _solar;
   const _showSurface = async function()
   {
-    if (!_three)
+    if (!Globe.THREE)
     {
       // We dont want three.js to complain that it was brought in again
       // after being brought in by global.gl, but we have to bring it in
       // again, because global.gl doesnt expose it. Here we just delete
       // the flag that three.js uses to detect that it was already loaded.
-      delete window.__THREE__;
+      //delete window.__THREE__;
 
-      _three = await import('./dependency/three.core.mjs');
+      Globe.THREE = await import('three');
     }
 
     _solar = opts.dayMode === 'daynight'
@@ -454,12 +454,12 @@ Globe = function(container, opts)
 
     const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
 
-    const surfaceTexture = await new _three.TextureLoader().loadAsync(planetimage);
+    const surfaceTexture = await new Globe.THREE.TextureLoader().loadAsync(planetimage);
     const bumpTexture = planet.bumpImageURL 
-                        ? await new _three.TextureLoader().loadAsync(planet.bumpImageURL)
+                        ? await new Globe.THREE.TextureLoader().loadAsync(planet.bumpImageURL)
                         : null;
     const surface2Texture = opts.dayMode === 'daynight' 
-                              ? await new _three.TextureLoader().loadAsync(planet.nightImageURL)
+                              ? await new Globe.THREE.TextureLoader().loadAsync(planet.nightImageURL)
                               : null;
 
     const matopts = opts.dayMode === 'night' 
@@ -467,13 +467,13 @@ Globe = function(container, opts)
                      : { };
     const mat = opts.dayMode === 'daynight'
                   ? _createDayNightMaterial(surfaceTexture, surface2Texture)
-                  : new _three.MeshLambertMaterial({ ...matopts, map: surfaceTexture, 
-                                                     transparent: true, bumpMap: bumpTexture,
-                                                     bumpScale: planet.bumpScale });
+                  : new Globe.THREE.MeshLambertMaterial({ ...matopts, map: surfaceTexture, 
+                                                          transparent: true, bumpMap: bumpTexture,
+                                                          bumpScale: planet.bumpScale });
     const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
-    const geo = new _three.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
-                                          widthSegments, widthSegments/2);
-    _surface = new _three.Mesh(geo, mat);
+    const geo = new Globe.THREE.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
+                                               widthSegments, widthSegments/2);
+    _surface = new Globe.THREE.Mesh(geo, mat);
 
     // Set sun position
     if (opts.dayMode === 'daynight')
@@ -588,12 +588,12 @@ Globe = function(container, opts)
         }
     `;
 
-    return new _three.ShaderMaterial({
+    return new Globe.THREE.ShaderMaterial({
         uniforms: {
           dayTexture: { value: daytexture },
           nightTexture: { value: nighttexture },
-          sunPosition: { value: new _three.Vector2() },
-          globeRotation: { value: new _three.Vector2() },
+          sunPosition: { value: new Globe.THREE.Vector2() },
+          globeRotation: { value: new Globe.THREE.Vector2() },
           opacity: { value: 1.0 }
         },
         vertexShader: vertexShader,
@@ -633,28 +633,28 @@ Globe = function(container, opts)
 
   const _createClouds = async function()
   {
-    if (!_three)
+    if (!Globe.THREE)
     {
       // We dont want three.js to complain that it was brought in again
       // after being brought in by global.gl, but we have to bring it in
       // again, because global.gl doesnt expose it. Here we just delete
       // the flag that three.js uses to detect that it was already loaded.
-      delete window.__THREE__;
+      //delete window.__THREE__;
 
-      _three = await import('./dependency/three.core.mjs');
+      Globe.THREE = await import('three');
     }
 
     return new Promise(resolve =>
     {
       // Create the clouds texture
-      new _three.TextureLoader().load(planet.cloudsURL, cloudsTexture => 
+      new Globe.THREE.TextureLoader().load(planet.cloudsURL, cloudsTexture => 
       {
         const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
 
-        _clouds = new _three.Mesh(
-          new _three.SphereGeometry(g.getGlobeRadius() * (1 + planet.cloudsAltitude), 
-                                    widthSegments, widthSegments/2),
-          new _three.MeshPhongMaterial({ map: cloudsTexture, transparent: true })
+        _clouds = new Globe.THREE.Mesh(
+          new Globe.THREE.SphereGeometry(g.getGlobeRadius() * (1 + planet.cloudsAltitude), 
+                                         widthSegments, widthSegments/2),
+          new Globe.THREE.MeshPhongMaterial({ map: cloudsTexture, transparent: true })
         );
 
         // Clouds are a bit clearer at night

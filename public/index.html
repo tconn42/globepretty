@@ -35,10 +35,22 @@
   }
   </style>
 
+  <script type="importmap">
+  {
+    "imports":
+    {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
+    }
+  }
+  </script>
+
   <script language="javascript" src="dist/dependency/globe.gl.min.js"></script>
   <script type="module" src="dist/globepretty.js"></script>
 
-  <script language="javascript">
+  <script type="module">
+
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
     window.addEventListener('load', () => 
     {
@@ -67,12 +79,12 @@
       const opts = { };
 
       const globe = new Globe(container, opts)
-        .ringsData(rings)
+     //   .ringsData(rings)
         .ringColor(() => colorInterpolator)
         .ringMaxRadius('maxR')
         .ringPropagationSpeed('propagationSpeed')
         .ringRepeatPeriod('repeatPeriod')
-        .pointsData(points)
+     //   .pointsData(points)
         .pointAltitude('size')
         .pointColor('color')
         .pointsMerge(true)
@@ -83,6 +95,43 @@
         .onGlobeReady(() =>
          {
            setTimeout(() => container.style.visibility = 'visible', 20);
+
+           // Load the glb file
+           const loader = new GLTFLoader();
+
+           loader.load('/images/babyyoda.glb', glb =>
+           {
+             const yoda = glb.scene.children[0];
+             yoda.scale.x = yoda.scale.y = yoda.scale.z = 10;
+             yoda.position.x = -150;
+             yoda.position.y = -250;
+             yoda.position.z = 275;
+             yoda.rotation.z = Math.PI;
+             globe.scene().add(yoda);
+           });
+
+           loader.load('/images/trex.glb', glb =>
+           {
+             const trex = glb.scene;
+             trex.scale.x = trex.scale.y = trex.scale.z = 20;
+             trex.position.x = -0;
+             trex.position.y = 100;
+             trex.position.z = 0;
+             trex.rotation.y = -Math.PI/2;
+             globe.scene().add(trex);
+
+             const mixer = new Globe.THREE.AnimationMixer(glb.scene);
+             const attack = mixer.clipAction(glb.animations[0]);
+             attack.play();
+
+             const clock = new Globe.THREE.Clock();
+             function animate()
+             {
+               requestAnimationFrame(animate);
+               mixer.update(clock.getDelta());
+             }
+             animate();
+           });
 
 //setTimeout(() => globe.pointOfView({ lat: 51.50735, lng: -0.12776, altitude: .4 }, 5000), 5000);
 //setTimeout(() => globe.pointOfView({ lat: 51.50735, lng: -0.12776, altitude: .02 }, 5000), 10000);
