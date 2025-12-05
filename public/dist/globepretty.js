@@ -483,6 +483,7 @@ Globe = function(container, opts)
     g.scene().add(_surface);
   }
 
+  let _prevSurfaceOpacity;
   const _changeSurfaceOpacity = function(altitude)
   {
     if (!_surface || !opts.tileEngineURL)
@@ -497,6 +498,27 @@ Globe = function(container, opts)
       _surface.material.uniforms.opacity.value = opacity;
     else
       _surface.material.opacity = opacity;
+
+    // When we start, the camera is far from the planet's surface and its near value
+    // is 0.05. Anything less than that causes depth z-fighting and surface flickering.
+    // But we need it to be less than this if we want to be able to zoom beyond slippy
+    // map zoom level 14. So we cheat and only change the camera near value to the
+    // smaller value when we are fully zoomed beyond the surface layer.
+    if (_prevSurfaceOpacity > 0 && opacity === 0)
+      _changeCameraNear(1e-5);
+    else if (_prevSurfaceOpacity === 0 && opacity > 0)
+      _changeCameraNear(0.05);
+    _prevSurfaceOpacity = opacity;
+  };
+  
+  const _changeCameraNear = function(near)
+  {
+    // Allow us to zoom in beyond zoom 14
+    g.camera().near = near;
+    g.camera().far = g.getGlobeRadius() * 100;
+    g.controls().minDistance = g.getGlobeRadius() * (1 + 5 / 2**g.globeTileEngineMaxLevel());
+    g.controls().maxDistance = g.camera().far - g.getGlobeRadius();
+    g.camera().updateProjectionMatrix();
   };
 
   // Get position of sun at given dt
