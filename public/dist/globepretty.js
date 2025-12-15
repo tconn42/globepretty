@@ -67,6 +67,9 @@
 //   starsURL (default 'images/night-sky.png')
 //     The url of the background stars, used to fill the container's background.
 //
+//   receiveShadows (default false)
+//     Whether the surface should receive cast shadows
+//
 //   maxPerformance (default false)
 //     Whether to increase performance at the expense of precision. If true,
 //     sets rendererConfig to:
@@ -111,6 +114,9 @@ Globe = function(container, opts)
 
       // Originally at http://unpkg.com/three-globe/example/img/earth-topology.png
       bumpImageURL: './images/earth-bump.png',
+
+      // Originally at http://cdn.jsdelivr.net/npm/three-globe/example/img/earth-water.png
+      waterURL: './images/earth-water.png',
 
       // How much to exaggerate the bump map
       bumpScale: 10,
@@ -250,12 +256,19 @@ Globe = function(container, opts)
            // Whether to increase performance at the expense of precision
            maxPerformance: false,
 
+           // Whether the surface should receive shadows cast by other objects in
+           // the scene
+           receiveShadows: false,
+
            ...opts };
 
   if (opts.maxPerformance)
     opts.rendererConfig = { antialias: false, alpha: false, precision: 'lowp' };
 
   const g = new OrigGlobe(container, opts);
+
+  let controls = g.controls();
+  const camera = g.camera();
 
   // Apply tile server if given
   if (opts.tileEngineURL)
@@ -425,8 +438,8 @@ Globe = function(container, opts)
       _spinspeed = _spinspeed || opts.autoRotateSpeed;
     else if (speed)
       _spinspeed = speed;
-    g.controls().autoRotate = speed === 0 ? false : true;
-    g.controls().autoRotateSpeed = _spinspeed;
+    controls.autoRotate = speed === 0 ? false : true;
+    controls.autoRotateSpeed = _spinspeed;
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -437,16 +450,7 @@ Globe = function(container, opts)
   let _surface, _solar;
   const _showSurface = async function()
   {
-    if (!Globe.THREE)
-    {
-      // We dont want three.js to complain that it was brought in again
-      // after being brought in by global.gl, but we have to bring it in
-      // again, because global.gl doesnt expose it. Here we just delete
-      // the flag that three.js uses to detect that it was already loaded.
-      //delete window.__THREE__;
-
-      Globe.THREE = await import('three');
-    }
+    await _loadThreeJS();
 
     _solar = opts.dayMode === 'daynight'
                ? await import('./dependency/solar-calculator.mjs')
@@ -458,6 +462,9 @@ Globe = function(container, opts)
     const bumpTexture = planet.bumpImageURL 
                         ? await new Globe.THREE.TextureLoader().loadAsync(planet.bumpImageURL)
                         : null;
+    const waterTexture = planet.waterURL
+                         ? await new Globe.THREE.TextureLoader().loadAsync(planet.waterURL)
+                         : null;
     const surface2Texture = opts.dayMode === 'daynight' 
                               ? await new Globe.THREE.TextureLoader().loadAsync(planet.nightImageURL)
                               : null;
@@ -467,13 +474,30 @@ Globe = function(container, opts)
                      : { };
     const mat = opts.dayMode === 'daynight'
                   ? _createDayNightMaterial(surfaceTexture, surface2Texture)
-                  : new Globe.THREE.MeshLambertMaterial({ ...matopts, map: surfaceTexture, 
+                  : waterTexture
+                    ? new Globe.THREE.MeshPhongMaterial({ ...matopts, map: surfaceTexture, 
                                                           transparent: true, bumpMap: bumpTexture,
-                                                          bumpScale: planet.bumpScale });
+                                                          bumpScale: planet.bumpScale,
+                                                          specularMap: waterTexture,
+                                                          specular: new Globe.THREE.Color('lightgrey'),
+                                                          shininess: 15
+                                                        })
+                    : new Globe.THREE.MeshLambertMaterial({ ...matopts, map: surfaceTexture, 
+                                                            transparent: true, bumpMap: bumpTexture,
+                                                            bumpScale: planet.bumpScale
+                                                          });
     const widthSegments = Math.max(4, Math.round(360 / g.globeCurvatureResolution()));
     const geo = new Globe.THREE.SphereGeometry(g.getGlobeRadius() * (1 + opts.surfaceAltitude), 
                                                widthSegments, widthSegments/2);
     _surface = new Globe.THREE.Mesh(geo, mat);
+
+    // Cast and accept shadows if we should
+    if (opts.receiveShadows)
+      _setupShadows();
+
+    // If water, change light position to see the specularMap's effect
+    const dirlight = g.lights().find(l => l.type === 'DirectionalLight');
+    dirlight && dirlight.position.set(1, 1, 1);
 
     // Set sun position
     if (opts.dayMode === 'daynight')
@@ -509,16 +533,82 @@ Globe = function(container, opts)
     else if (_prevSurfaceOpacity === 0 && opacity > 0)
       _changeCameraNear(0.05);
     _prevSurfaceOpacity = opacity;
+
+    _changeCameraAngle(altitude);
   };
   
   const _changeCameraNear = function(near)
   {
     // Allow us to zoom in beyond zoom 14
-    g.camera().near = near;
-    g.camera().far = g.getGlobeRadius() * 100;
-    g.controls().minDistance = g.getGlobeRadius() * (1 + 5 / 2**g.globeTileEngineMaxLevel());
-    g.controls().maxDistance = g.camera().far - g.getGlobeRadius();
-    g.camera().updateProjectionMatrix();
+    camera.near = near;
+    camera.far = g.getGlobeRadius() * 100;
+    controls.minDistance = g.getGlobeRadius() * (1 + 5 / 2**g.globeTileEngineMaxLevel());
+    controls.maxDistance = camera.far - g.getGlobeRadius();
+    camera.updateProjectionMatrix();
+  };
+
+  const _changeCameraAngle = function(alt)
+  {
+    const maxTiltY = 80;
+    const startTiltAlt = 0;
+    const endTiltAlt = .05;
+    const width = endTiltAlt - startTiltAlt;
+    const center = startTiltAlt + width/2;
+    const y = _cosineHump(alt, center, width, maxTiltY);
+
+    if (controls.facing)
+      controls.facing.y = y;
+  };
+
+  /**
+   * Calculates a single cosine hump function value for a given x.
+   * The hump is zero outside the range [center - width/2, center + width/2].
+   *
+   * @param {number} x The input value.
+   * @param {number} center The x-coordinate where the hump is centered (peak location).
+   * @param {number} width The total width of the hump's base.
+   * @param {number} height The maximum height (amplitude) of the hump.
+   * @returns {number} The value of the cosine hump at x.
+   */
+   const _cosineHump = (x, center, width, height) =>
+   {
+     // Define the boundaries where the function is non-zero
+     const halfWidth = width / 2;
+     const xMin = center - halfWidth;
+     const xMax = center + halfWidth;
+
+     // Check if x is outside the active range (compact support)
+     if (x < xMin || x > xMax)
+        return 0;
+
+     // Map the current x value from the custom range [xMin, xMax]
+     // to the standard cosine range [0, 2*Math.PI] for one full period.
+     // However, for a single *hump* that goes from 0 to 1 and back to 0,
+     // we use a mapping to [ -Math.PI, Math.PI ] and shift the cosine result.
+     // A mapping to [0, 2*Math.PI] and a vertical shift also works.
+     const scaledX = (x - xMin) / width; // scales x from [xMin, xMax] to [0, 1]
+    
+     // The formula for the hump:
+     // We use a half-period of the cosine wave, shifted vertically.
+     // cos(scaledX * 2 * Math.PI) ranges from 1 to 1 to 1 over [0, 1]. This isn't right.
+     // We need a function that goes from -pi to pi for the smooth ramp up and down.
+    
+     // Re-scaling x to be in the range [0, Math.PI] for half a cosine wave
+     const angle = scaledX * Math.PI; 
+
+     // The expression Math.cos(angle) goes from 1 to -1 over the interval [0, Math.PI].
+     // We need to shift and scale it to go from 0 to 1 to 0 (which it doesn't).
+    
+     // Let's use the formula from the previous answer which uses one full period,
+     // vertically shifted: 0.5 * (Math.cos(...) + 1)
+     const angleFullPeriod = (x - center) * (2 * Math.PI / width);
+
+     // This expression 0.5 * (Math.cos(angleFullPeriod) + 1) ranges from 0 to 1 and
+     // back to 0 over the correct interval.
+     const baseHump = 0.5 * (Math.cos(angleFullPeriod) + 1);
+
+     // Apply the desired height (amplitude)
+     return height * baseHump;
   };
 
   // Get position of sun at given dt
@@ -655,16 +745,7 @@ Globe = function(container, opts)
 
   const _createClouds = async function()
   {
-    if (!Globe.THREE)
-    {
-      // We dont want three.js to complain that it was brought in again
-      // after being brought in by global.gl, but we have to bring it in
-      // again, because global.gl doesnt expose it. Here we just delete
-      // the flag that three.js uses to detect that it was already loaded.
-      //delete window.__THREE__;
-
-      Globe.THREE = await import('three');
-    }
+    await _loadThreeJS();
 
     return new Promise(resolve =>
     {
@@ -715,6 +796,77 @@ Globe = function(container, opts)
     g.width(container.offsetWidth)
      .height(container.offsetHeight);
   });
+
+  ///////////////////////////////////////////////////////////////////////////
+  // THREE JS
+  ///////////////////////////////////////////////////////////////////////////
+
+  const _loadThreeJS = async function()
+  {
+    if (!Globe.THREE)
+    {
+      // We dont want three.js to complain that it was brought in again
+      // after being brought in by global.gl, but we have to bring it in
+      // again, because global.gl doesnt expose it. Here we just delete
+      // the flag that three.js uses to detect that it was already loaded.
+      //delete window.__THREE__;
+
+      Globe.THREE = await import('three');
+
+      // Override the orbital controls update() function, so that we
+      // can look at something other than what we are orbiting
+      const oldupdate = controls.update.bind(controls);
+      controls.facing = (new Globe.THREE.Vector3()).copy(controls.target);
+      controls.update = ((...args) =>
+      {
+        const result = oldupdate(...args);
+        camera.lookAt(controls.facing);
+        return result;
+      }).bind(controls);
+    }
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // SHADOWS
+  ///////////////////////////////////////////////////////////////////////////
+
+  const _setupShadows = () =>
+  {
+    g.renderer().shadowMap.enabled = true;
+    _surface.receiveShadow = true;
+
+    g.lights().filter(l => l.type === 'DirectionalLight')
+              .forEach(l => 
+                       {
+                         l.castShadow = true;
+                         //l.shadow.mapSize.width = 1024;
+                         //l.shadow.mapSize.height = 1024;
+                         //l.shadow.bias = -0.001; // Adjust for artifacts (penumbra)
+                         const R = g.getGlobeRadius() * 1.2; // Only objs within 20% of surface cast shadows
+                         l.shadow.camera.top = R;
+                         l.shadow.camera.bottom = -R;
+                         l.shadow.camera.left = -R;
+                         l.shadow.camera.right = R;
+                         l.shadow.camera.near = -R;
+                         l.shadow.camera.far = R;
+                         //g.scene().add( new Globe.THREE.CameraHelper( l.shadow.camera ) );
+                       });
+  };
+
+  // Make the given THREEJS object cast shadows
+  g.castShadows = obj =>
+  {
+    if (!obj)
+      obj = g.scene();
+    if (!obj || typeof obj.traverse !== 'function')
+      return;
+
+    obj.traverse(child =>
+    {
+      if (child.isMesh)
+        child.castShadow = true;
+    });
+  };
 
   return g;
 }

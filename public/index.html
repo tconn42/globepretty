@@ -76,7 +76,7 @@
 
       const colorInterpolator = t => `rgba(255,100,50,${Math.sqrt(1-t)})`;
 
-      const opts = { };
+      const opts = { receiveShadows: true };
 
       const globe = new Globe(container, opts)
      //   .ringsData(rings)
@@ -96,9 +96,12 @@
          {
            setTimeout(() => container.style.visibility = 'visible', 20);
 
+//globe.pointOfView({ lat: 51.509865, lng: -0.118092, altitude: .0001 });
+
            // Load the glb file
            const loader = new GLTFLoader();
 
+/*
            loader.load('/images/babyyoda.glb', glb =>
            {
              const yoda = glb.scene.children[0];
@@ -109,7 +112,7 @@
              yoda.rotation.z = Math.PI;
              globe.scene().add(yoda);
            });
-
+*/
            loader.load('/images/trex.glb', glb =>
            {
              const trex = glb.scene;
@@ -118,6 +121,8 @@
              trex.position.y = 100;
              trex.position.z = 0;
              trex.rotation.y = -Math.PI/2;
+             if (opts.receiveShadows)
+               globe.castShadows(trex);
              globe.scene().add(trex);
 
              const mixer = new Globe.THREE.AnimationMixer(glb.scene);
