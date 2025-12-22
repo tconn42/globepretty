@@ -67,6 +67,10 @@
 //   starsURL (default 'images/night-sky.png')
 //     The url of the background stars, used to fill the container's background.
 //
+//   tiltCameraNearSurface (default true)
+//     Whether to tilt the camera (to look at the northern horizon) when very
+//     near the surface.
+//
 //   receiveShadows (default false)
 //     Whether the surface should receive cast shadows
 //
@@ -253,6 +257,9 @@ Globe = function(container, opts)
            // The url of the background stars
            starsURL: './images/night-sky.png',
 
+           // Whether to tilt the camera when very near the surface
+           tiltCameraNearSurface: true,
+
            // Whether to increase performance at the expense of precision
            maxPerformance: false,
 
@@ -390,6 +397,10 @@ Globe = function(container, opts)
     // Handle surface opacity
     if (Math.abs(_prevLatLngAlt?.altitude - latLngAlt.altitude) > .00001)
       _changeSurfaceOpacity(latLngAlt.altitude);
+
+    // Handle camera tilt as we near the surface
+    if (opts.tiltCameraNearSurface)
+      _changeCameraAngle(latLngAlt);
 
     // Handle day/night shading
     if (_prevLatLngAlt?.lat != latLngAlt.lat || _prevLatLngAlt?.lng != latLngAlt.lng)
@@ -533,8 +544,6 @@ Globe = function(container, opts)
     else if (_prevSurfaceOpacity === 0 && opacity > 0)
       _changeCameraNear(0.05);
     _prevSurfaceOpacity = opacity;
-
-    _changeCameraAngle(altitude);
   };
   
   const _changeCameraNear = function(near)
@@ -547,68 +556,48 @@ Globe = function(container, opts)
     camera.updateProjectionMatrix();
   };
 
-  const _changeCameraAngle = function(alt)
+  let _prevLatDelta = 0;
+  const _changeCameraAngle = function(latLngAlt)
   {
-    const maxTiltY = 80;
-    const startTiltAlt = 0;
-    const endTiltAlt = .05;
-    const width = endTiltAlt - startTiltAlt;
-    const center = startTiltAlt + width/2;
-    const y = _cosineHump(alt, center, width, maxTiltY);
+    // Below a given altitude we both tilt the camera (to look toward the
+    // northern horizon) and move the camera slightly south (to maintain
+    // looking at the same surface point we were dollying toward).
+    const startTiltAlt = .003;
+    const maxLatDelta = -.015;
 
-    if (controls.facing)
-      controls.facing.y = y;
-  };
+    if (!Globe.THREE || !controls.facing || latLngAlt.lat < -90 - maxLatDelta)
+      return;
 
-  /**
-   * Calculates a single cosine hump function value for a given x.
-   * The hump is zero outside the range [center - width/2, center + width/2].
-   *
-   * @param {number} x The input value.
-   * @param {number} center The x-coordinate where the hump is centered (peak location).
-   * @param {number} width The total width of the hump's base.
-   * @param {number} height The maximum height (amplitude) of the hump.
-   * @returns {number} The value of the cosine hump at x.
-   */
-   const _cosineHump = (x, center, width, height) =>
-   {
-     // Define the boundaries where the function is non-zero
-     const halfWidth = width / 2;
-     const xMin = center - halfWidth;
-     const xMax = center + halfWidth;
+    const pctTilt = Math.max(0, Math.min(1, (startTiltAlt - latLngAlt.altitude) / startTiltAlt));
+    const latDeltaAtAlt = maxLatDelta * pctTilt;
+    const newLatDelta = latDeltaAtAlt - _prevLatDelta;
 
-     // Check if x is outside the active range (compact support)
-     if (x < xMin || x > xMax)
-        return 0;
+    // Position camera
+    const newLat = latLngAlt.lat + newLatDelta;
+    g.pointOfView({ lat: newLat });
 
-     // Map the current x value from the custom range [xMin, xMax]
-     // to the standard cosine range [0, 2*Math.PI] for one full period.
-     // However, for a single *hump* that goes from 0 to 1 and back to 0,
-     // we use a mapping to [ -Math.PI, Math.PI ] and shift the cosine result.
-     // A mapping to [0, 2*Math.PI] and a vertical shift also works.
-     const scaledX = (x - xMin) / width; // scales x from [xMin, xMax] to [0, 1]
-    
-     // The formula for the hump:
-     // We use a half-period of the cosine wave, shifted vertically.
-     // cos(scaledX * 2 * Math.PI) ranges from 1 to 1 to 1 over [0, 1]. This isn't right.
-     // We need a function that goes from -pi to pi for the smooth ramp up and down.
-    
-     // Re-scaling x to be in the range [0, Math.PI] for half a cosine wave
-     const angle = scaledX * Math.PI; 
+    // Tilt camera to lookAt the point directly below the camera if it weren't
+    // repositioned above
+    if (latLngAlt.altitude > startTiltAlt)
+      controls.facing.set(0, 0, 0);
+    else
+    {
+      const currPos = camera.position;
+      const midLat = newLat - latDeltaAtAlt / 5;
+      const lookAtPos = g.getCoords(midLat, latLngAlt.lng, 0);
 
-     // The expression Math.cos(angle) goes from 1 to -1 over the interval [0, Math.PI].
-     // We need to shift and scale it to go from 0 to 1 to 0 (which it doesn't).
-    
-     // Let's use the formula from the previous answer which uses one full period,
-     // vertically shifted: 0.5 * (Math.cos(...) + 1)
-     const angleFullPeriod = (x - center) * (2 * Math.PI / width);
+      // How far is the camera from the origin
+      const distToOrigin = latLngAlt.altitude * 100 + 100;
 
-     // This expression 0.5 * (Math.cos(angleFullPeriod) + 1) ranges from 0 to 1 and
-     // back to 0 over the correct interval.
-     const baseHump = 0.5 * (Math.cos(angleFullPeriod) + 1);
+      // Find point that is same distance from camera but on line from currPos thru lookAtPos
+      controls.facing.set(lookAtPos.x, lookAtPos.y, lookAtPos.z);
+      controls.facing.subVectors(controls.facing, currPos) // Line from currPos thru lookAtPos
+                     .normalize()                          // normalized to unit vector
+                     .multiplyScalar(distToOrigin)         // scaled to same distance as to origin
+                     .add(currPos);                        // added to camera position
+    }
 
-     // Apply the desired height (amplitude)
-     return height * baseHump;
+    _prevLatDelta = latDeltaAtAlt;
   };
 
   // Get position of sun at given dt
