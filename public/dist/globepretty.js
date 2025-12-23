@@ -387,6 +387,7 @@ Globe = function(container, opts)
   // we can change the surface opacity if applicable
   let _onZoomCbfn;
   let _prevLatLngAlt;
+  const minAlt = .0000382;
   g.onZoom(latLngAlt =>
   {
     // We only count altitude changes as an interaction
@@ -403,7 +404,7 @@ Globe = function(container, opts)
 
     // If there was a noticeable altitude change
     if (opts.tiltCameraNearSurface && 
-        Math.abs(_prevLatLngAlt?.altitude - latLngAlt.altitude) > .00000001)
+        (_prevLatLngAlt?.altitude > minAlt || latLngAlt.altitude > minAlt))
     {
       // Handle camera tilt as we near the surface
       _changeCameraAngle(latLngAlt);
