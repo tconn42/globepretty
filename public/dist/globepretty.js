@@ -84,8 +84,18 @@
 // 
 // Resizing the globe's container automatically recenters/resizes the globe.
 //
-// To use this module, import it after importing globe.gl, like this:
+// To use this module, import it after including globe.gl, like this:
 //     <script language="javascript" src="globe.gl.min.js"></script>
+//     <script type="importmap">
+//     {
+//       "imports":
+//       {
+//         "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+//         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/",
+//         "solar": "https://cdn.jsdelivr.net/npm/solar-calculator@0.3.0/+esm"
+//       }
+//     }
+//     </script>
 //     <script type="module" src="globepretty.js"></script>
 // Also make sure to copy the dist/images files to your /images folder.
 //////////////////////////////////////////////////////////////////////////////
@@ -471,9 +481,7 @@ Globe = function(container, opts)
   {
     await _loadThreeJS();
 
-    _solar = opts.dayMode === 'daynight'
-               ? await import('./dependency/solar-calculator.mjs')
-               : null;
+    _solar = opts.dayMode === 'daynight' ? await import('solar') : null;
 
     const planetimage = opts.dayMode === 'night' ? planet.nightImageURL : planet.imageURL;
 
