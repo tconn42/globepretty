@@ -399,10 +399,14 @@ Globe = function(container, opts)
     {
       // Handle surface opacity
       _changeSurfaceOpacity(latLngAlt.altitude);
+    }
 
+    // If there was a noticeable altitude change
+    if (opts.tiltCameraNearSurface && 
+        Math.abs(_prevLatLngAlt?.altitude - latLngAlt.altitude) > .00000001)
+    {
       // Handle camera tilt as we near the surface
-      if (opts.tiltCameraNearSurface)
-        _changeCameraAngle(latLngAlt);
+      _changeCameraAngle(latLngAlt);
     }
 
     // Handle day/night shading
@@ -574,8 +578,6 @@ Globe = function(container, opts)
     const pctTilt = Math.max(0, Math.min(1, (startTiltAlt - latLngAlt.altitude) / startTiltAlt));
     const latDeltaAtAlt = maxLatDelta * pctTilt;
     const newLatDelta = latDeltaAtAlt - _prevLatDelta;
-if (newLatDelta)
-  console.log('alt: ' + latLngAlt.altitude + ' pctTilt: ' + pctTilt + ' newDelta: ' + newLatDelta);
 
     // Position camera
     const newLat = latLngAlt.lat + newLatDelta;
